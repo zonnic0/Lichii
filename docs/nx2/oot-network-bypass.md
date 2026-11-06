@@ -44,6 +44,17 @@ pass draws on the 3D engine and the network's passes do not all run on the same 
 The game's constants (shader hashes, program keys, the cb0 offset) are in
 `src/video_core/oot_network.h`.
 
+## Test switches
+
+Environment variables, read once; they only act while No sharpening is on in Ocarina of Time.
+
+- `EDEN_NX2_OOT_LOG_KEYS=1` logs each distinct native compute program key once (`HW_GPU`, info),
+  with the compute shader's hash (`ShaderInfo::unique_hash`) and its first-seen order. Use it to
+  find the key of the heavy dispatch.
+- `EDEN_NX2_OOT_SKIP_KEYS=<hex>[,<hex>...]` skips more native program keys (with or without `0x`),
+  exactly like the prepass and the network: only while the output pass is being replaced and the
+  tonemapped image has been seen. The parsed keys are logged once.
+
 ## Results (Ryzen 7 9800X3D, RTX 5090, Kokiri Forest, 1x)
 
 | Mode | fps | Image |

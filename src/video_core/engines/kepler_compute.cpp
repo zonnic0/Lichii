@@ -11,10 +11,13 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <mutex>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 #include "common/assert.h"
 #include "common/dkb_frame_trace.h"
 #include "common/logging.h"
@@ -899,11 +902,40 @@ std::optional<Texture::TICEntry> KeplerCompute::ConstBuffer0Image(u32 offset) co
     return GetTICEntry(tic_index);
 }
 
-bool KeplerCompute::BypassOotNetwork(u64 program_id, u64 native_key) {
+bool KeplerCompute::BypassOotNetwork(u64 program_id, u64 native_key, u64 shader_hash) {
     using namespace VideoCommon::OotNetwork;
     if (!BypassEnabled(program_id)) {
         return false;
     }
+    // Test switches (docs/nx2/oot-network-bypass.md): log each distinct compute program once, and
+    // skip more programs while the output pass is being replaced.
+    static const bool log_keys = std::getenv("EDEN_NX2_OOT_LOG_KEYS") != nullptr;
+    if (log_keys) {
+        static std::mutex mutex;
+        static std::unordered_set<u64> seen;
+        std::scoped_lock lock{mutex};
+        if (seen.insert(native_key).second) {
+            LOG_INFO(HW_GPU,
+                     "Ocarina of Time compute #{}: native key {:#018x}, shader hash {:#018x}",
+                     seen.size(), native_key, shader_hash);
+        }
+    }
+    static const std::vector<u64> skip_keys = [] {
+        std::vector<u64> keys;
+        if (const char* const value = std::getenv("EDEN_NX2_OOT_SKIP_KEYS")) {
+            std::istringstream list{value};
+            for (std::string item; std::getline(list, item, ',');) {
+                try {
+                    keys.push_back(std::stoull(item, nullptr, 16));
+                } catch (const std::exception&) {
+                    LOG_WARNING(HW_GPU, "Ignoring EDEN_NX2_OOT_SKIP_KEYS entry '{}'", item);
+                }
+            }
+            LOG_INFO(HW_GPU, "Ocarina of Time: also skipping {} native keys: {:#x}", keys.size(),
+                     fmt::join(keys, ", "));
+        }
+        return keys;
+    }();
     auto* const state = rasterizer->OotNetworkBypass();
     if (!state) {
         return false;
@@ -915,7 +947,8 @@ bool KeplerCompute::BypassOotNetwork(u64 program_id, u64 native_key) {
     if (tonemapped == 0) {
         return false;
     }
-    if (native_key == PrepassProgramKey || native_key == NetworkProgramKey) {
+    if (native_key == PrepassProgramKey || native_key == NetworkProgramKey ||
+        std::ranges::find(skip_keys, native_key) != skip_keys.end()) {
         return state->output_replaced.load(std::memory_order_relaxed);
     }
     if (native_key != OutputProgramKey) {
