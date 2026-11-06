@@ -280,6 +280,30 @@ std::string Report(const std::vector<Target>& targets, const std::vector<Sample>
         print("inclusive (on the stack)", inclusive, 90);
         text += "\n";
     }
+
+    // <out>.jit: the host RIP of every sample outside all loaded modules (dynarmic's code
+    // buffer), "thread address count". tools/nx2/jit_guest_pc.py maps them to guest blocks.
+    std::map<std::pair<unsigned, DWORD64>, unsigned> jit;
+    unsigned jit_samples = 0;
+    for (const Sample& sample : samples) {
+        if (sample.depth != 0 && symbolizer.Name(sample.frames[0]) == "(jit)") {
+            ++jit[{sample.thread, sample.frames[0]}];
+            ++jit_samples;
+        }
+    }
+    if (jit_samples != 0) {
+        const std::string jit_path = std::string{path} + ".jit";
+        if (std::FILE* const out = std::fopen(jit_path.c_str(), "w")) {
+            for (const auto& [key, count] : jit) {
+                std::fprintf(out, "%s %llx %u\n", targets[key.first].name.c_str(),
+                             static_cast<unsigned long long>(key.second), count);
+            }
+            std::fclose(out);
+        }
+        text += fmt::format("-- jit: {} samples at {} distinct addresses (see {})\n", jit_samples,
+                            jit.size(), jit_path);
+    }
+
     if (std::FILE* const file = std::fopen(path, "w")) {
         std::fwrite(text.data(), 1, text.size(), file);
         std::fclose(file);

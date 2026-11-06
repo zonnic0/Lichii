@@ -196,6 +196,16 @@ the self, self-and-caller and inclusive counts per function. The report and its 
 to `samples-<session>-<n>.txt` in the dump directory. Windows only; the threads run slower while
 sampled, so read fps from a run without it.
 
+Samples whose top frame is outside every module (`(jit)`, the guest code dynarmic compiled) also go
+to `<report>.jit` as `thread hex_address count`. To see which guest code that is, launch with
+`EDEN_NX2_JIT_MAP=<dir>`: dynarmic then writes `<dir>/perf-<pid>.map` (`start size name`, hex;
+`PERF_BUILDID_DIR` still works on Linux), with one `a64_<PC>_fpcr<FPCR>` entry per compiled block.
+It is off, and costs one cached check, when unset. Then run
+`python3 -I tools/nx2/jit_guest_pc.py <report>.jit <dir>/perf-<pid>.map --thread CPUCore_4
+--module-base 0x...` (the log's `Module main loaded at 0x...`) for the hottest guest blocks, 4 KiB
+pages and estimated functions. Take the samples in the same run as the map, since the host addresses
+differ per run.
+
 **`reject_shaders`** `{hashes?, reject?, timeout_s?}`. This is `EDEN_NX2_REJECT_HASH` at
 runtime: the same keys (native program key or shader hash) and the same effect. Pipeline
 invalidation turned out to be tractable:
