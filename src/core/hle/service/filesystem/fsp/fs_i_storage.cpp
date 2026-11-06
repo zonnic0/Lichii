@@ -6,6 +6,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <limits>
 #include <thread>
 
 #include <fmt/format.h>
@@ -42,9 +45,24 @@ Result IStorage::Read(
     if (now < next_read_tick) {
         std::this_thread::sleep_for(next_read_tick - now);
     }
+    // EDEN_NX2_FS_THROTTLE=<MB/s>,<max charged KiB, 0 = the whole read> overrides the pacing below
+    // (diagnostic: tests whether a title depends on how long large reads take).
+    static const auto throttle = [] {
+        std::pair<s64, s64> value{ReadBytesPerSecond, MaxChargedReadSize};
+        if (const char* env = std::getenv("EDEN_NX2_FS_THROTTLE")) {
+            long long mbps = 0;
+            long long kib = 0;
+            if (std::sscanf(env, "%lld,%lld", &mbps, &kib) == 2 && mbps > 0 && kib >= 0) {
+                value = {mbps * 1'000'000, kib == 0 ? std::numeric_limits<s64>::max() : kib * 1024};
+            }
+            LOG_INFO(Service_FS, "EDEN_NX2_FS_THROTTLE={}: {} B/s, max charged {}", env, value.first,
+                     value.second);
+        }
+        return value;
+    }();
     next_read_tick = std::chrono::steady_clock::now() +
-                     std::chrono::nanoseconds{std::min(length, MaxChargedReadSize) *
-                                              1'000'000'000 / ReadBytesPerSecond};
+                     std::chrono::nanoseconds{std::min(length, throttle.second) * 1'000'000'000 /
+                                              throttle.first};
 
     // Read the data from the Storage backend
     const auto got = backend->Read(out_bytes.data(), length, offset);
