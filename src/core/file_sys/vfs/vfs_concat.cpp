@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <utility>
 
+#include <fmt/format.h>
+
 #include "common/assert.h"
 #include "core/file_sys/vfs/vfs_concat.h"
 #include "core/file_sys/vfs/vfs_static.h"
@@ -187,6 +189,29 @@ std::size_t ConcatenatedVfsFile::Write(const u8* data, std::size_t length, std::
 
 bool ConcatenatedVfsFile::Rename(std::string_view new_name) {
     return false;
+}
+
+std::string ConcatenatedVfsFile::DescribeRange(std::size_t offset, std::size_t length) const {
+    constexpr std::size_t MaxMembers = 8;
+    std::string out = fmt::format("ConcatenatedVfsFile '{}' size={:#x} members=[", GetName(),
+                                  GetSize());
+    std::size_t covered = 0;
+    for (const auto& entry : concatenation_map) {
+        const u64 end = entry.offset + entry.file->GetSize();
+        if (end <= offset || entry.offset >= offset + length) {
+            continue;
+        }
+        if (covered++ < MaxMembers) {
+            const u64 from = std::max<u64>(offset, entry.offset);
+            const u64 to = std::min<u64>(offset + length, end);
+            out += fmt::format("{}{{start={:#x} {}}}", covered > 1 ? ", " : "", entry.offset,
+                               entry.file->DescribeRange(from - entry.offset, to - from));
+        }
+    }
+    if (covered > MaxMembers) {
+        out += fmt::format(", +{} more", covered - MaxMembers);
+    }
+    return out + "]";
 }
 
 } // namespace FileSys

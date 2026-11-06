@@ -188,6 +188,10 @@ public:
 
     // Returns the full path of this file as a string, recursively
     virtual std::string GetFullPath() const;
+
+    // Describes the file and any files it wraps for the bytes [offset, offset + length), for
+    // EDEN_NX2_FS_TRACE.
+    virtual std::string DescribeRange(std::size_t offset, std::size_t length) const;
 };
 
 // A class representing a directory in an abstract filesystem.

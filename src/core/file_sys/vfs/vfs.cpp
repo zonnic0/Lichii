@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <numeric>
 #include <string>
+#include <fmt/format.h>
 #include "common/fs/path_util.h"
 #include "core/file_sys/vfs/vfs.h"
 
@@ -199,6 +200,10 @@ std::string VfsFile::GetFullPath() const {
         return '/' + GetName();
 
     return GetContainingDirectory()->GetFullPath() + '/' + GetName();
+}
+
+std::string VfsFile::DescribeRange(std::size_t offset, std::size_t) const {
+    return fmt::format("file '{}' size={:#x} local_offset={:#x}", GetName(), GetSize(), offset);
 }
 
 VirtualFile VfsDirectory::GetFileRelative(std::string_view path) const {

@@ -34,6 +34,7 @@ public:
     std::size_t WriteBytes(const std::vector<u8>& data, std::size_t offset) override;
 
     bool Rename(std::string_view new_name) override;
+    std::string DescribeRange(std::size_t offset, std::size_t length) const override;
 
     std::size_t GetOffset() const;
 

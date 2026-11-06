@@ -73,6 +73,8 @@ add_library(core STATIC
     file_sys/fs_path_utility.h
     file_sys/fs_save_data_types.h
     file_sys/fs_string_util.h
+    file_sys/fs_trace.cpp
+    file_sys/fs_trace.h
     file_sys/fsa/fs_i_directory.h
     file_sys/fsa/fs_i_file.h
     file_sys/fsa/fs_i_filesystem.h

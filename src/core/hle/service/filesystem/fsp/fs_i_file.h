@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include "core/file_sys/fs_trace.h"
 #include "core/file_sys/fsa/fs_i_file.h"
 #include "core/hle/service/cmif_types.h"
 #include "core/hle/service/filesystem/filesystem.h"
@@ -18,7 +19,9 @@ public:
     explicit IFile(Core::System& system_, FileSys::VirtualFile file_);
 
 private:
+    FileSys::VirtualFile file;
     std::unique_ptr<FileSys::Fsa::IFile> backend;
+    FileSys::FsReadTrace read_trace;
 
     Result Read(FileSys::ReadOption option, Out<s64> out_size, s64 offset,
                 const OutBuffer<BufferAttr_HipcMapAlias | BufferAttr_HipcMapTransferAllowsNonSecure>

@@ -8,6 +8,7 @@
 
 #include <chrono>
 
+#include "core/file_sys/fs_trace.h"
 #include "core/file_sys/vfs/vfs.h"
 #include "core/hle/service/cmif_types.h"
 #include "core/hle/service/filesystem/filesystem.h"
@@ -25,6 +26,7 @@ private:
     static constexpr s64 ReadBytesPerSecond = 40'000'000;
     static constexpr s64 MaxChargedReadSize = 64 * 1024;
     std::chrono::steady_clock::time_point next_read_tick{};
+    FileSys::FsReadTrace read_trace;
 
     Result Read(
         OutBuffer<BufferAttr_HipcMapAlias | BufferAttr_HipcMapTransferAllowsNonSecure> out_bytes,

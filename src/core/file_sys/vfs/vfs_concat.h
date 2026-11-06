@@ -48,6 +48,7 @@ public:
     std::size_t Read(u8* data, std::size_t length, std::size_t offset) const override;
     std::size_t Write(const u8* data, std::size_t length, std::size_t offset) override;
     bool Rename(std::string_view new_name) override;
+    std::string DescribeRange(std::size_t offset, std::size_t length) const override;
 
 private:
     ConcatenationMap concatenation_map;

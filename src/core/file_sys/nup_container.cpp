@@ -4,6 +4,8 @@
 #include "core/file_sys/nup_container.h"
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstddef>
 #include <cstring>
 #include <list>
@@ -203,12 +205,21 @@ public:
         }
 
         // Miss: decompress without holding the lock, then publish and copy.
+        const bool trace = FsTraceEnabled();
+        const auto start = trace ? std::chrono::steady_clock::now()
+                                 : std::chrono::steady_clock::time_point{};
         std::vector<u8> scratch = Decompress();
+        if (trace) {
+            TraceDecompress("memory", start);
+        }
         if (scratch.empty()) {
             return 0;
         }
         {
             std::scoped_lock lock{cache->mutex};
+            if (trace) {
+                cache->trace_names.try_emplace(cache_index, name);
+            }
             cache->Insert(cache_index, scratch);
             if (const auto* cached = cache->Find(cache_index)) {
                 std::memcpy(data, cached->data() + offset, length);
@@ -228,7 +239,27 @@ public:
         return true;
     }
 
+    std::string DescribeRange(std::size_t offset, std::size_t) const override {
+        return fmt::format("NupVfsFile '{}' zstd size={:#x} compressed={:#x} local_offset={:#x} "
+                           "extent_offset={:#x} mode={}",
+                           name, uncompressed_size, extent_size, offset, extent_offset,
+                           cache_enabled ? "memory" : "spill");
+    }
+
 private:
+    void TraceDecompress(const char* mode, std::chrono::steady_clock::time_point start) const {
+        const u64 count = ++trace_misses;
+        if (!FsTraceSample(count, 5, 64)) {
+            return;
+        }
+        const std::chrono::duration<double, std::milli> elapsed =
+            std::chrono::steady_clock::now() - start;
+        LOG_INFO(Service_FS,
+                 "fs trace: NUP decompress #{} file={} uncompressed_size={} cache_enabled={} "
+                 "mode={} decompress_ms={:.1f}",
+                 count, name, uncompressed_size, cache_enabled, mode, elapsed.count());
+    }
+
     std::size_t ReadSpilled(u8* data, std::size_t length, std::size_t offset) const {
         std::shared_ptr<NupSpillFile> spill;
         {
@@ -238,7 +269,13 @@ private:
         std::scoped_lock lock{spill->mutex};
         if (!spill->attempted) {
             spill->attempted = true;
+            const bool trace = FsTraceEnabled();
+            const auto start = trace ? std::chrono::steady_clock::now()
+                                     : std::chrono::steady_clock::time_point{};
             DecompressToFile(*spill);
+            if (trace) {
+                TraceDecompress("spill", start);
+            }
         }
         if (!spill->file.IsOpen() || !spill->file.Seek(static_cast<s64>(offset))) {
             return 0;
@@ -338,6 +375,7 @@ private:
     std::shared_ptr<NupDecompressCache> cache;
     std::size_t cache_index;
     bool cache_enabled;
+    mutable std::atomic<u64> trace_misses{};
 };
 
 } // namespace

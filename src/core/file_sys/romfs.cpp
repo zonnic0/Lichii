@@ -5,7 +5,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <memory>
+#include <string>
 
+#include <fmt/format.h>
+
+#include "common/alignment.h"
 #include "common/assert.h"
 #include "common/common_types.h"
 #include "common/string_util.h"
@@ -165,6 +169,48 @@ VirtualFile CreateRomFS(VirtualDir dir, VirtualDir ext) {
 
     RomFSBuildContext ctx{dir, ext};
     return ConcatenatedVfsFile::MakeConcatenatedFile(0, dir->GetName(), ctx.Build());
+}
+
+std::string DescribeRomFSRange(const VirtualFile& file, u64 offset, u64 length) {
+    constexpr std::size_t MaxFiles = 8;
+    RomFSTraversalContext ctx{};
+    if (file == nullptr || file->ReadObject(&ctx.header) != sizeof(RomFSHeader) ||
+        ctx.header.header_size != sizeof(RomFSHeader)) {
+        return {};
+    }
+    ctx.file = file;
+    ctx.directory_meta =
+        file->ReadBytes(ctx.header.directory_meta.size, ctx.header.directory_meta.offset);
+    ctx.file_meta = file->ReadBytes(ctx.header.file_meta.size, ctx.header.file_meta.offset);
+
+    std::string out;
+    std::size_t matched = 0;
+    for (size_t at = 0; at + sizeof(FileEntry) <= ctx.file_meta.size();) {
+        const auto [entry, name] = GetFileEntry(ctx, at);
+        at += sizeof(FileEntry) + Common::AlignUp<size_t>(entry.name_length, 4);
+
+        const u64 begin = ctx.header.data_offset + entry.offset;
+        if (begin + entry.size <= offset || begin >= offset + length) {
+            continue;
+        }
+        if (matched++ >= MaxFiles) {
+            continue;
+        }
+        std::string path = name;
+        u32 dir = entry.parent;
+        for (int depth = 0; dir != 0 && depth < 64; ++depth) {
+            const auto [dir_entry, dir_name] = GetDirectoryEntry(ctx, dir);
+            path = dir_name + '/' + path;
+            dir = dir_entry.parent;
+        }
+        out += fmt::format("{}/{} (romfs_offset={:#x}, size={:#x}, range_in_file={:#x})",
+                           out.empty() ? "" : ", ", path, begin, entry.size,
+                           std::max(offset, begin) - begin);
+    }
+    if (matched > MaxFiles) {
+        out += fmt::format(", +{} more", matched - MaxFiles);
+    }
+    return out;
 }
 
 } // namespace FileSys

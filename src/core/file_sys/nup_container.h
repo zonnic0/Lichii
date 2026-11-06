@@ -16,6 +16,8 @@
 
 #include "common/common_types.h"
 #include "common/fs/file.h"
+#include "common/logging.h"
+#include "core/file_sys/fs_trace.h"
 #include "core/file_sys/vfs/vfs_types.h"
 #include "core/file_sys/vfs/vfs_vector.h"
 #include "core/loader/loader.h"
@@ -45,6 +47,9 @@ struct NupDecompressCache {
     std::size_t cap{DefaultCap};
     std::filesystem::path spill_dir;
     std::unordered_map<std::size_t, std::shared_ptr<NupSpillFile>> spills;
+    // EDEN_NX2_FS_TRACE only: member names of cached extents and the eviction count.
+    std::unordered_map<std::size_t, std::string> trace_names;
+    u64 trace_evictions{};
 
     std::vector<u8>* Find(std::size_t file_index) {
         const auto it = index.find(file_index);
@@ -62,6 +67,13 @@ struct NupDecompressCache {
         }
         while (bytes + data.size() > cap && !lru.empty()) {
             bytes -= lru.back().second.size();
+            if (FsTraceEnabled() && FsTraceSample(++trace_evictions, 5, 64)) {
+                LOG_INFO(Service_FS,
+                         "fs trace: NUP cache evict #{} file={} size={} cache_bytes_after={} "
+                         "cap={}",
+                         trace_evictions, trace_names[lru.back().first], lru.back().second.size(),
+                         bytes, cap);
+            }
             index.erase(lru.back().first);
             lru.pop_back();
         }

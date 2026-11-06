@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <utility>
 
+#include <fmt/format.h>
+
 #include "core/file_sys/vfs/vfs_offset.h"
 
 namespace FileSys {
@@ -84,6 +86,11 @@ std::size_t OffsetVfsFile::WriteBytes(const std::vector<u8>& data, std::size_t r
 
 bool OffsetVfsFile::Rename(std::string_view new_name) {
     return file->Rename(new_name);
+}
+
+std::string OffsetVfsFile::DescribeRange(std::size_t r_offset, std::size_t length) const {
+    return fmt::format("OffsetVfsFile '{}' size={:#x} local_offset={:#x} base_offset={:#x} -> {}",
+                       name, size, r_offset, offset, file->DescribeRange(offset + r_offset, length));
 }
 
 std::size_t OffsetVfsFile::GetOffset() const {

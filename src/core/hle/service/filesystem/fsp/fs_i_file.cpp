@@ -4,6 +4,8 @@
 // SPDX-FileCopyrightText: Copyright 2023 yuzu Emulator Project
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <fmt/format.h>
+
 #include "core/file_sys/errors.h"
 #include "core/hle/service/cmif_serialization.h"
 #include "core/hle/service/filesystem/fsp/fs_i_file.h"
@@ -11,7 +13,8 @@
 namespace Service::FileSystem {
 
 IFile::IFile(Core::System& system_, FileSys::VirtualFile file_)
-    : ServiceFramework{system_, "IFile"}, backend{std::make_unique<FileSys::Fsa::IFile>(file_)} {
+    : ServiceFramework{system_, "IFile"}, file{file_},
+      backend{std::make_unique<FileSys::Fsa::IFile>(file_)} {
     // clang-format off
     static const FunctionInfo functions[] = {
         {0, D<&IFile::Read>, "Read"},
@@ -34,8 +37,17 @@ Result IFile::Read(
               size);
 
     // Read the data from the Storage backend
-    R_RETURN(
-        backend->Read(reinterpret_cast<size_t*>(out_size.Get()), offset, out_buffer.data(), size));
+    const Result result =
+        backend->Read(reinterpret_cast<size_t*>(out_size.Get()), offset, out_buffer.data(), size);
+
+    if (FileSys::FsTraceEnabled() && result.IsSuccess() && file != nullptr) {
+        read_trace.Log("IFile", offset, size, static_cast<u64>(*out_size), out_buffer.data(), [&] {
+            return fmt::format("path={} {}", file->GetFullPath(),
+                               file->DescribeRange(offset, size));
+        });
+    }
+
+    R_RETURN(result);
 }
 
 Result IFile::Write(

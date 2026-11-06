@@ -15,4 +15,8 @@ VirtualDir ExtractRomFS(VirtualFile file);
 // Returns nullptr on failure
 VirtualFile CreateRomFS(VirtualDir dir, VirtualDir ext = nullptr);
 
+// Lists the files of a RomFS image overlapping [offset, offset + length), for EDEN_NX2_FS_TRACE.
+// Returns an empty string if `file` is not a RomFS image.
+std::string DescribeRomFSRange(const VirtualFile& file, u64 offset, u64 length);
+
 } // namespace FileSys

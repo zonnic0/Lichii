@@ -8,7 +8,10 @@
 #include <chrono>
 #include <thread>
 
+#include <fmt/format.h>
+
 #include "core/file_sys/errors.h"
+#include "core/file_sys/romfs.h"
 #include "core/hle/service/cmif_serialization.h"
 #include "core/hle/service/filesystem/fsp/fs_i_storage.h"
 
@@ -44,7 +47,15 @@ Result IStorage::Read(
                                               1'000'000'000 / ReadBytesPerSecond};
 
     // Read the data from the Storage backend
-    backend->Read(out_bytes.data(), length, offset);
+    const auto got = backend->Read(out_bytes.data(), length, offset);
+
+    if (FileSys::FsTraceEnabled()) {
+        read_trace.Log("IStorage", offset, length, got, out_bytes.data(), [&] {
+            return fmt::format("romfs=[{}] backend={}",
+                               FileSys::DescribeRomFSRange(backend, offset, length),
+                               backend->DescribeRange(offset, length));
+        });
+    }
 
     R_SUCCEED();
 }
