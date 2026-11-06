@@ -34,7 +34,7 @@ private:
         u64 short_reads{};
     };
 
-    static constexpr std::size_t MaxKeys = 4096;
+    static constexpr std::size_t MaxKeys = 16384;
 
     std::mutex mutex;
     std::map<std::pair<s64, s64>, Counts> counts;

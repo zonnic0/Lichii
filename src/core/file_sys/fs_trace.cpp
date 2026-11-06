@@ -49,7 +49,11 @@ void FsReadTrace::Log(std::string_view what, s64 offset, s64 length, u64 got, co
         auto it = counts.find(key);
         if (it == counts.end()) {
             if (counts.size() >= MaxKeys) {
-                return;
+                // Loading streams thousands of one-off reads: forget those, keep the ones that repeat.
+                std::erase_if(counts, [](const auto& entry) { return entry.second.reads < 2; });
+                if (counts.size() >= MaxKeys) {
+                    counts.clear();
+                }
             }
             it = counts.try_emplace(key).first;
         }
